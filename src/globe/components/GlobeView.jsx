@@ -1,10 +1,5 @@
-import React, { Suspense, useState, useCallback, useMemo } from 'react';
-import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Stars } from '@react-three/drei';
-import * as THREE from 'three';
-import Globe from './Globe.jsx';
-import Markers from './Markers.jsx';
-import Arches from './Arches.jsx';
+import React, { useState, useCallback, useMemo } from 'react';
+import MapboxGlobe from './MapboxGlobe.jsx';
 import { geocodeLocation } from '../utils/geocoding.js';
 
 // Loading component
@@ -20,9 +15,9 @@ function LoadingSpinner() {
       textAlign: 'center',
       zIndex: 10
     }}>
-      <div>Loading 3D Globe...</div>
+      <div>Loading Realistic 3D Globe...</div>
       <div style={{ fontSize: '14px', marginTop: '10px', opacity: 0.7 }}>
-        Preparing Three.js scene
+        Loading Mapbox satellite imagery and terrain
       </div>
     </div>
   );
@@ -182,8 +177,8 @@ export default function GlobeView({
   }, [onArcClick]);
   
   // Handle loading state
-  const handleCreated = useCallback(() => {
-    setTimeout(() => setIsLoading(false), 1000); // Small delay for smooth transition
+  React.useEffect(() => {
+    setTimeout(() => setIsLoading(false), 2000); // Small delay for Mapbox to load
   }, []);
   
   return (
@@ -197,74 +192,20 @@ export default function GlobeView({
       }}>
         {isLoading && <LoadingSpinner />}
         
-        <Canvas
-          camera={{ 
-            position: cameraPosition, 
-            fov: 45,
-            near: 0.1,
-            far: 1000
-          }}
-          onCreated={handleCreated}
-          style={{ 
-            opacity: isLoading ? 0 : 1,
-            transition: 'opacity 0.5s ease-in-out'
-          }}
-        >
-          {/* Lighting */}
-          <ambientLight intensity={0.4} />
-          <directionalLight 
-            position={[10, 5, 5]} 
-            intensity={0.8}
-            castShadow
+        <div style={{ 
+          opacity: isLoading ? 0 : 1,
+          transition: 'opacity 0.5s ease-in-out',
+          width: '100%',
+          height: '100%'
+        }}>
+          <MapboxGlobe 
+            events={processedData.events}
+            arcEvents={processedData.arcs}
+            enableRotation={enableRotation}
+            onMarkerClick={handleMarkerClick}
+            onArcClick={handleArcClick}
           />
-          <pointLight 
-            position={[-10, -5, -5]} 
-            intensity={0.3}
-            color="#4A90E2"
-          />
-          
-          {/* Background stars */}
-          {showStars && (
-            <Stars 
-              radius={300} 
-              depth={50} 
-              count={1000} 
-              factor={4} 
-              saturation={0} 
-              fade={true}
-            />
-          )}
-          
-          {/* Globe and content */}
-          <Suspense fallback={null}>
-            <Globe enableRotation={enableRotation}>
-              <Markers 
-                events={processedData.events}
-                onMarkerClick={handleMarkerClick}
-              />
-              <Arches 
-                arcs={processedData.arcs}
-                onArcClick={handleArcClick}
-              />
-            </Globe>
-          </Suspense>
-          
-          {/* Controls */}
-          {enableControls && (
-            <OrbitControls
-              enablePan={true}
-              enableZoom={true}
-              enableRotate={true}
-              zoomSpeed={0.6}
-              panSpeed={0.5}
-              rotateSpeed={0.4}
-              minDistance={8}
-              maxDistance={50}
-              minPolarAngle={0}
-              maxPolarAngle={Math.PI}
-            />
-          )}
-        </Canvas>
+        </div>
         
         {/* Event details overlay */}
         {selectedEvent && (
@@ -341,7 +282,7 @@ export default function GlobeView({
         }}>
           <div>Events: {processedData.events.length}</div>
           <div>Arcs: {processedData.arcs.length}</div>
-          <div>Renderer: Three.js</div>
+          <div>Renderer: Mapbox GL JS</div>
         </div>
       </div>
     </GlobeErrorBoundary>

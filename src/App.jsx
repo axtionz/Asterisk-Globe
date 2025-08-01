@@ -1,9 +1,6 @@
-import React, { useState, useCallback, useEffect } from 'react';
-import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Stars } from '@react-three/drei';
-import Globe from './globe/components/Globe.jsx';
-import Markers from './globe/components/Markers.jsx';
-import Arches from './globe/components/Arches.jsx';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import MapboxGlobe from './globe/components/MapboxGlobe.jsx';
+import SimpleMapboxTest from './globe/components/SimpleMapboxTest.jsx';
 import StatusIndicator from './StatusIndicator.jsx';
 import { openaiService, geocodingService } from './services/apiService.js';
 import { AGENT_CONFIG } from './agentConfig.js';
@@ -30,6 +27,10 @@ export default function OriginalApp() {
   
   // Globe controls
   const [rotationSpeed, setRotationSpeed] = useState(0.002);
+  
+  // Dev panel state
+  const [currentZoom, setCurrentZoom] = useState(2);
+  const globeRef = useRef(null);
 
   useEffect(() => {
     // Add default New York earthquake event
@@ -250,171 +251,28 @@ export default function OriginalApp() {
   return (
     <>
       <StatusIndicator statusText="Listening for events…" />
-      <div className="app">
-        <div className="controls">
-          <h3>Globe Controls</h3>
-          <p>• Left-drag to rotate the globe</p>
-          <p>• Right-drag to adjust view angle</p>
-          <p>• Scroll to zoom in/out</p>
-          <p>• Component loaded: {isLoaded ? 'Yes' : 'No'}</p>
-          
-          <button
-            onClick={() => {
-              setEvents([]);
-              setArcEvents([]);
-              setChatHistory([]);
-            }}
-            style={{
-              width: '100%',
-              padding: '10px',
-              backgroundColor: '#dc3545',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              margin: '20px 0 10px 0',
-              fontWeight: 'bold',
-              fontSize: '14px'
-            }}
-          >
-            Clear All Events
-          </button>
-          
-          <hr style={{ margin: '20px 0', border: '1px solid #ccc' }} />
-          
-          <h3>Terminal Chat</h3>
-          <p style={{ fontSize: '12px', color: '#666', marginBottom: '10px' }}>
-            Type natural language event descriptions:
-          </p>
-          
-          {/* Chat History */}
-          <div style={{
-            height: '200px',
-            border: '1px solid #ccc',
-            backgroundColor: '#000',
-            color: '#0f0',
-            fontFamily: 'monospace',
-            fontSize: '12px',
-            padding: '10px',
-            overflowY: 'auto',
-            marginBottom: '10px',
-            borderRadius: '4px'
-          }}>
-            {chatHistory.length === 0 && (
-              <div style={{ color: '#666' }}>
-                {'>'} Try: "Earthquake in Tokyo, magnitude 6.1"<br/>
-                {'>'} Try: "Volcano eruption in Iceland, magnitude 4.2"<br/>
-                {'>'} Try: "Iran sends missiles to Iraq"
-              </div>
-            )}
-            {chatHistory.map((message, index) => (
-              <div key={index} style={{ marginBottom: '5px' }}>
-                <span style={{ color: '#888' }}>
-                  {message.timestamp.toLocaleTimeString()}
-                </span>
-                <span style={{ 
-                  color: message.type === 'user' ? '#0f0' : 
-                         message.type === 'agent' ? '#87ceeb' :  
-                         message.type === 'system' ? '#ff0' : 
-                         message.type === 'success' ? '#0ff' : '#f00'
-                }}>
-                  {' '}{message.text}
-                </span>
-              </div>
-            ))}
-            {isProcessingChat && (
-              <div style={{ color: '#ff0' }}>
-                {'>'} Processing...
-              </div>
-            )}
-          </div>
-          
-          {/* Chat Input */}
-          <div style={{ display: 'flex', alignItems: 'center' }}>
-            <span style={{ color: '#0f0', fontFamily: 'monospace', marginRight: '5px' }}>{'>'}</span>
-            <input
-              type="text"
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              onKeyPress={handleChatKeyPress}
-              placeholder="Earthquake in Tokyo, magnitude 6.1"
-              disabled={isProcessingChat}
-              style={{
-                flex: 1,
-                padding: '8px',
-                backgroundColor: '#000',
-                color: '#0f0',
-                border: '1px solid #0f0',
-                fontFamily: 'monospace',
-                fontSize: '12px',
-                outline: 'none'
+      <div className="app" style={{ width: '100vw', height: '100vh', margin: 0, padding: 0 }}>
+        <div className="globe-container" style={{ 
+          position: 'relative', 
+          width: '100%', 
+          height: '100%' 
+        }}>
+          {/* Main Globe */}
+          {isLoaded ? (
+            <MapboxGlobe 
+              ref={globeRef}
+              events={events}
+              arcEvents={arcEvents}
+              enableRotation={true}
+              rotationSpeed={rotationSpeed}
+              onZoomChange={setCurrentZoom}
+              onMarkerClick={(marker) => {
+                console.log('Marker clicked:', marker);
+              }}
+              onArcClick={(arc) => {
+                console.log('Arc clicked:', arc);
               }}
             />
-          </div>
-          
-          <p style={{ fontSize: '12px', color: '#666', marginTop: '10px' }}>
-            Events plotted: {events.length} | Arcs: {arcEvents.length}
-          </p>
-        </div>
-        
-        <div className="globe-container" style={{ position: 'relative' }}>
-          {isLoaded ? (
-            <>
-              <Canvas
-                camera={{ 
-                  position: [0, 0, 15], 
-                  fov: 45 
-                }}
-                style={{ background: '#000' }}
-                gl={{ antialias: true, alpha: false }}
-              >
-                {/* Background stars */}
-                <Stars 
-                  radius={300} 
-                  depth={50} 
-                  count={2000} 
-                  factor={6} 
-                  saturation={0} 
-                  fade={true}
-                />
-                
-                {/* Ambient lighting for advanced globe */}
-                <ambientLight intensity={0.2} />
-                <directionalLight position={[10, 10, 5]} intensity={0.5} />
-                
-                {/* Legacy Globe with yellow and white lines */}
-                <Globe 
-                  enableRotation={true}
-                  rotationSpeed={rotationSpeed}
-                >
-                  <Markers 
-                    events={events}
-                    onMarkerClick={(marker) => {
-                      console.log('Marker clicked:', marker);
-                    }}
-                  />
-                  <Arches 
-                    arcs={arcEvents}
-                    onArcClick={(arc) => {
-                      console.log('Arc clicked:', arc);
-                    }}
-                  />
-                </Globe>
-                
-                {/* Controls */}
-                <OrbitControls
-                  enablePan={true}
-                  enableZoom={true}
-                  enableRotate={true}
-                  zoomSpeed={0.6}
-                  panSpeed={0.5}
-                  rotateSpeed={0.4}
-                  minDistance={8}
-                  maxDistance={50}
-                />
-              </Canvas>
-              
-            </>
           ) : (
             <div style={{ 
               width: '100%', 
@@ -427,7 +285,7 @@ export default function OriginalApp() {
               fontSize: '18px'
             }}>
               <div>
-                <div>Loading high-quality geospatial data...</div>
+                <div>Loading realistic 3D globe with satellite imagery...</div>
               </div>
             </div>
           )}
@@ -458,14 +316,18 @@ export default function OriginalApp() {
           backgroundColor: '#2a2a2a'
         }}>
           <h4 style={{ margin: 0, color: '#4A90E2' }}>
-            🧪 Dev Panel - News Processing → Plotting
+            🧪 Dev Panel - Globe Controls & News Processing
           </h4>
-          <div style={{ fontSize: '12px', color: '#888' }}>
-            Results: {newsResults.length} | Success Rate: {
+          <div style={{ fontSize: '12px', color: '#888', display: 'flex', gap: '20px' }}>
+            <span>Zoom: {currentZoom.toFixed(2)}</span>
+            <span>Events: {events.length}</span>
+            <span>Arcs: {arcEvents.length}</span>
+            <span>Results: {newsResults.length}</span>
+            <span>Success Rate: {
               newsResults.length > 0 
                 ? Math.round((newsResults.filter(r => r.success).length / newsResults.length) * 100)
                 : 0
-            }%
+            }%</span>
           </div>
         </div>
         

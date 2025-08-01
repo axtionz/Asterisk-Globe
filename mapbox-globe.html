@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mapbox 3D Globe with Terrain</title>
+    
+    <!-- Mapbox GL JS -->
+    <script src='https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.js'></script>
+    <link href='https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.css' rel='stylesheet' />
+    
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Arial', sans-serif;
+            background: #000011;
+            overflow: hidden;
+        }
+
+        /* Map container with full viewport */
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+            height: 100vh;
+        }
+
+        /* Starfield background */
+        #starfield {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            background: radial-gradient(ellipse at bottom, #1B2735 0%, #090A0F 100%);
+        }
+
+        .star {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: white;
+            border-radius: 50%;
+            animation: twinkle 3s infinite;
+        }
+
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 1; }
+        }
+
+        /* Loading indicator */
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #fff;
+            font-size: 18px;
+            z-index: 1000;
+        }
+
+        /* Controls overlay */
+        .controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 10px;
+            color: white;
+            font-size: 14px;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+        }
+
+        .control-group {
+            margin-bottom: 10px;
+        }
+
+        .control-group label {
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .control-group input[type="range"] {
+            width: 200px;
+        }
+
+        .control-group button {
+            background: #4264fb;
+            border: none;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-right: 5px;
+        }
+
+        .control-group button:hover {
+            background: #3651e8;
+        }
+    </style>
+</head>
+<body>
+    <!-- Starfield background -->
+    <div id="starfield"></div>
+    
+    <!-- Loading indicator -->
+    <div class="loading" id="loading">Loading 3D Globe...</div>
+    
+    <!-- Map container -->
+    <div id="map"></div>
+    
+    <!-- Controls overlay -->
+    <div class="controls">
+        <div class="control-group">
+            <label>Atmosphere Intensity</label>
+            <input type="range" id="atmosphereRange" min="0" max="1" step="0.1" value="0.6">
+        </div>
+        <div class="control-group">
+            <label>Terrain Exaggeration</label>
+            <input type="range" id="terrainRange" min="0" max="3" step="0.1" value="1.5">
+        </div>
+        <div class="control-group">
+            <button onclick="toggleProjection()">Toggle Globe/Flat</button>
+            <button onclick="resetCamera()">Reset View</button>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Mapbox access token
+        mapboxgl.accessToken = 'pk.eyJ1IjoiYXh0aW9ueiIsImEiOiJjbWRydmk3emcwbXVmMnRvbzFmYmtqOG5qIn0.VuJUXUPmKGQgNsqOFKl0lg';
+        
+        // Global variables
+        let map;
+        let isGlobeProjection = true;
+        
+        // Create starfield background
+        function createStarfield() {
+            const starfield = document.getElementById('starfield');
+            const numStars = 200;
+            
+            for (let i = 0; i < numStars; i++) {
+                const star = document.createElement('div');
+                star.className = 'star';
+                star.style.left = Math.random() * 100 + '%';
+                star.style.top = Math.random() * 100 + '%';
+                star.style.animationDelay = Math.random() * 3 + 's';
+                starfield.appendChild(star);
+            }
+        }
+        
+        // Initialize the map with 3D globe projection
+        function initializeMap() {
+            map = new mapboxgl.Map({
+                container: 'map',
+                // Use Mapbox Satellite style for realistic Earth appearance
+                style: 'mapbox://styles/mapbox/satellite-v9',
+                // Start with globe projection
+                projection: 'globe',
+                zoom: 1.5,
+                center: [0, 30],
+                pitch: 0,
+                bearing: 0,
+                // Enhanced atmosphere and fog effects
+                fog: {
+                    'range': [0.8, 8],
+                    'color': '#dc9f9f',
+                    'horizon-blend': 0.5,
+                    'high-color': '#245bde',
+                    'space-color': '#000b1b',
+                    'star-intensity': 0.8
+                }
+            });
+            
+            // Add terrain source and layer after map loads
+            map.on('load', function() {
+                // Hide loading indicator
+                document.getElementById('loading').style.display = 'none';
+                
+                // Add Mapbox Terrain-RGB source for 3D terrain
+                map.addSource('mapbox-dem', {
+                    'type': 'raster-dem',
+                    'url': 'mapbox://mapbox.terrain-rgb',
+                    'tileSize': 512,
+                    'maxzoom': 14
+                });
+                
+                // Set terrain with exaggeration for dramatic 3D effect
+                map.setTerrain({
+                    'source': 'mapbox-dem',
+                    'exaggeration': 1.5
+                });
+                
+                // Add atmosphere layer for enhanced visual effects
+                map.addLayer({
+                    'id': 'sky',
+                    'type': 'sky',
+                    'paint': {
+                        'sky-type': 'atmosphere',
+                        'sky-atmosphere-sun': [0.0, 0.0],
+                        'sky-atmosphere-sun-intensity': 15
+                    }
+                });
+                
+                // Smooth camera animation on load
+                map.easeTo({
+                    center: [0, 30],
+                    zoom: 2,
+                    pitch: 45,
+                    bearing: 0,
+                    duration: 3000
+                });
+                
+                // Auto-rotate the globe slowly
+                startAutoRotation();
+            });
+            
+            // Add smooth camera controls
+            map.addControl(new mapboxgl.NavigationControl({
+                visualizePitch: true
+            }), 'top-right');
+            
+            // Add fullscreen control
+            map.addControl(new mapboxgl.FullscreenControl(), 'top-right');
+            
+            // Optimize performance with level-of-detail rendering
+            map.on('movestart', function() {
+                // Reduce quality during movement for smoother performance
+                map.getCanvasContainer().style.cursor = 'grabbing';
+            });
+            
+            map.on('moveend', function() {
+                // Restore quality after movement stops
+                map.getCanvasContainer().style.cursor = '';
+            });
+        }
+        
+        // Auto-rotation functionality
+        let rotationAnimation;
+        function startAutoRotation() {
+            // Rotate the globe slowly when not interacting
+            let userInteracting = false;
+            let spinEnabled = true;
+            
+            function spinGlobe() {
+                const zoom = map.getZoom();
+                if (spinEnabled && !userInteracting && zoom < 5) {
+                    let distancePerSecond = 360 / 120; // Complete rotation in 2 minutes
+                    const center = map.getCenter();
+                    center.lng -= distancePerSecond;
+                    
+                    // Seamless rotation across dateline
+                    map.easeTo({
+                        center: center,
+                        duration: 1000,
+                        easing: function(n) { return n; }
+                    });
+                }
+            }
+            
+            rotationAnimation = setInterval(spinGlobe, 1000);
+            
+            // Pause rotation during user interaction
+            map.on('mousedown', function() { userInteracting = true; });
+            map.on('mouseup', function() { 
+                userInteracting = false;
+                // Resume rotation after 3 seconds of inactivity
+                setTimeout(() => { if (!userInteracting) spinEnabled = true; }, 3000);
+            });
+            map.on('dragstart', function() { userInteracting = true; spinEnabled = false; });
+            map.on('pitchstart', function() { userInteracting = true; spinEnabled = false; });
+            map.on('rotatestart', function() { userInteracting = true; spinEnabled = false; });
+            map.on('zoomstart', function() { userInteracting = true; spinEnabled = false; });
+        }
+        
+        // Toggle between globe and flat projections
+        function toggleProjection() {
+            if (isGlobeProjection) {
+                map.setProjection('mercator');
+                isGlobeProjection = false;
+            } else {
+                map.setProjection('globe');
+                isGlobeProjection = true;
+            }
+        }
+        
+        // Reset camera to initial position
+        function resetCamera() {
+            map.easeTo({
+                center: [0, 30],
+                zoom: 2,
+                pitch: 45,
+                bearing: 0,
+                duration: 2000
+            });
+        }
+        
+        // Control handlers for atmosphere and terrain
+        document.getElementById('atmosphereRange').addEventListener('input', function(e) {
+            const intensity = parseFloat(e.target.value);
+            map.setPaintProperty('sky', 'sky-atmosphere-sun-intensity', intensity * 25);
+        });
+        
+        document.getElementById('terrainRange').addEventListener('input', function(e) {
+            const exaggeration = parseFloat(e.target.value);
+            map.setTerrain({
+                'source': 'mapbox-dem',
+                'exaggeration': exaggeration
+            });
+        });
+        
+        // Enhanced error handling
+        map.on('error', function(e) {
+            console.error('Mapbox GL JS error:', e.error);
+            document.getElementById('loading').innerHTML = 'Error loading map. Please check your Mapbox token.';
+        });
+        
+        // Performance monitoring
+        map.on('sourcedata', function(e) {
+            if (e.isSourceLoaded) {
+                console.log('Source loaded:', e.sourceId);
+            }
+        });
+        
+        // Initialize everything when DOM is ready
+        document.addEventListener('DOMContentLoaded', function() {
+            createStarfield();
+            initializeMap();
+        });
+        
+        // Responsive handling
+        window.addEventListener('resize', function() {
+            map.resize();
+        });
+    </script>
+</body>
+</html>
